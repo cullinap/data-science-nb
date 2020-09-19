@@ -1,0 +1,369 @@
+<p>{
+ “cells”: [
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “## Non-Negative Matrix Factorization\n”,
+    “\n”,
+    “Non-negative Matrix Factorization (NMF) is a matrix factorization technique that has uses in natural language processing, recommender systems, genetics, and other domains. NMF works by approximating an input matrix with two other smaller matrices called factor W and H.\n”,
+    “\n”,
+    “If $V$ in the input matrix, NMF seeks to find $W$ and $H$ such that $V \approx WH$. In this approximation process $W$ and $H$ must be non-negative and one dimension from each matrix $k$ will be established ahead of time. \n”,
+    “\n”,
+    “The resulting dimensions of the algorithm will be such:\n”,
+    “\n”,
+    “input: $V \in^{nxm} $\n”,
+    “output: $H \in {\rm I\!R}^{kxm}$ and $W \in {\rm I\!R} ^{nxk}$ \n”,
+    “\n”,
+    “In the case of topic modeling input $V$ would be a document-term matrix where dimensions $n x m$ would be equivalent to documents and terms respectively. The $k$ dimension would be the number of clusters you determine ahead of time.\n”,
+    “\n”,
+    “A paper entitled "Algorithms for Non-negative Matrix Factorization" by Lee and Seung introduced a method to solve this problem using multiplicative algorithms. \n”,
+    “\n”,
+    “In the code below we will step through the algorithm using a small matrix of random values to show how we can solve this problem using multiplicative update.\n”,
+    “\n”,
+    “The algorithm can broken into two basic parts, prediction and error measurement. The alogrithm starts off by creating two random matrices with the dimensions we desire and makes a prediction. It then takes that prediction and measures it against the input to find how close that guess was. If our guess was close enough to the answer the algorithm stops and returns the two matrices that when multiply come close enough to our input. If the error is above our threshold it will loop through again, update the guess and try to get a little closer on the next iteration. We can establish ahead of time how many "guesses" the algorithm can take by setting max iterations.”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “##### The Algorithm\n”,
+    “\n”,
+    “We start off by generating our target matrix $V$. In real-world use cases this would be your document-term matrix or a matrix of images. “
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 3,
+   “metadata”: {},
+   “outputs”: [
+    {
+     “data”: {
+      “text/plain”: [
+       “array([[0.52142698, 0.61715405, 0.85269285, 0.7216024 , 0.22255575],\n”,
+       “       [0.4164208 , 0.64619605, 0.97472937, 0.00334586, 0.92235833],\n”,
+       “       [0.12443351, 0.63216622, 0.24411527, 0.79399003, 0.95376448],\n”,
+       “       [0.96640626, 0.55492143, 0.43466789, 0.68585392, 0.81442501],\n”,
+       “       [0.34213085, 0.34744151, 0.17180828, 0.97618289, 0.89745677]])”
+      ]
+     },
+     “execution_count”: 3,
+     “metadata”: {},
+     “output_type”: “execute_result”
+    }
+   ],
+   “source”: [
+    “import random\n”,
+    “import numpy as np\n”,
+    “\n”,
+    “V = np.random.rand(5,5); V”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “To initiate the algorithm we fill the matrices with random numbers which we will soon update. Factor $W$ will have the dimension $nxk$ and $H$ will have the dimension $kxm$.\n”,
+    “\n”,
+    “To keep things simple we will use a k value of 3. One of the decision you make prior to decomposing your input matrix is the rank of matrices of that will approximate it. Factor $W$ &amp; $K$ will have this $k$ value as a dimension.”
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 4,
+   “metadata”: {},
+   “outputs”: [
+    {
+     “data”: {
+      “text/plain”: [
+       “array([[0.6298243 , 0.42676458, 0.56225968],\n”,
+       “       [0.81288485, 0.78283431, 0.19474575],\n”,
+       “       [0.40726168, 0.3849017 , 0.85837444],\n”,
+       “       [0.97692879, 0.17577736, 0.19055122],\n”,
+       “       [0.48738989, 0.64414879, 0.83538579]])”
+      ]
+     },
+     “execution_count”: 4,
+     “metadata”: {},
+     “output_type”: “execute_result”
+    }
+   ],
+   “source”: [
+    “# create matrix W\n”,
+    “\n”,
+    “k = 3\n”,
+    “W = np.random.rand(V.shape[0], k); W”
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 5,
+   “metadata”: {},
+   “outputs”: [
+    {
+     “data”: {
+      “text/plain”: [
+       “array([[0.24091399, 0.8052402 , 0.45386546, 0.31473816, 0.77594193],\n”,
+       “       [0.7435351 , 0.93153323, 0.56875252, 0.1645829 , 0.79815081],\n”,
+       “       [0.52025911, 0.87431377, 0.52447758, 0.84346597, 0.46510706]])”
+      ]
+     },
+     “execution_count”: 5,
+     “metadata”: {},
+     “output_type”: “execute_result”
+    }
+   ],
+   “source”: [
+    “# create matrix H\n”,
+    “\n”,
+    “H = np.random.rand(k, V.shape[1]); H”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “As we jump into our first iteration we have to define some parameters so our algorithm knows when to stop\n”,
+    “\n”,
+    “When the limit (init_limit) is less than the error we stop the algorithm, and epsilon is a very small number that we use in our multiplicative update rules to keep the matrices positive.”
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 6,
+   “metadata”: {},
+   “outputs”: [],
+   “source”: [
+    “error = 1e-6 # when the limit is less than the error we stop the algorithm\n”,
+    “init_limit = 1e9 # start with a big error and slowly wittle it away\n”,
+    “eps = 1e-7 # epsilon keeps the matrices positive”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “Now we are ready to take our randomly generated factors H &amp; W and feed them into our multiplicative update formula. The formula differs for each factor. “
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 7,
+   “metadata”: {},
+   “outputs”: [
+    {
+     “data”: {
+      “text/plain”: [
+       “array([[0.1769291 , 0.32543888, 0.32092189, 0.27038211, 0.514692  ],\n”,
+       “       [0.35287573, 0.33842039, 0.36882068, 0.12434339, 0.52235002],\n”,
+       “       [0.21868777, 0.31058734, 0.24624031, 0.77617435, 0.31329617]])”
+      ]
+     },
+     “execution_count”: 7,
+     “metadata”: {},
+     “output_type”: “execute_result”
+    }
+   ],
+   “source”: [
+    “H <em>= ((W.T.dot(V) + eps) / (W.T.dot(W).dot(H) + eps)); H”
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 8,
+   “metadata”: {},
+   “outputs”: [
+    {
+     “data”: {
+      “text/plain”: [
+       “array([[0.58158347, 0.4074247 , 0.5811519 ],\n”,
+       “       [0.83068364, 0.85491908, 0.14938989],\n”,
+       “       [0.42464564, 0.3808956 , 0.84150784],\n”,
+       “       [1.36952829, 0.26431136, 0.28907238],\n”,
+       “       [0.40217643, 0.49438314, 0.76097884]])”
+      ]
+     },
+     “execution_count”: 8,
+     “metadata”: {},
+     “output_type”: “execute_result”
+    }
+   ],
+   “source”: [
+    “W *= ((V.dot(H.T) + eps) / (W.dot(H.dot(H.T)) + eps)); W”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “Now we need to measure the distance between the product of $W</em>H$ and our original matrix $V$. This is where we obtain our variable lim. \n”,
+    “\n”,
+    “In this equation we are using the Frobenius norm in this form: $||V - WH||_F$. The frobenius norm is a matrix norm, that takes the absolute value of each element, squares it, sums all the elements, and then takes the square root of that matrix. We are using it in this equation as the cost function. As $W$ &amp; $H$ are updated in each iteration they are multiplied together and subtracted from $V$. The resulting matrix is then the input to the frobenius norm. We name the output of this step the variable limit. When this lim value is less than our error that we set above, we stop the calculation. If it is not we rename it init_limit and go back to the beginning of the algorithm. \n”,
+    “\n”,
+    “Numpy has a method called linalg.norm which makes it convinent to calculate the frobienius norm. for us:”
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 10,
+   “metadata”: {},
+   “outputs”: [
+    {
+     “data”: {
+      “text/plain”: [
+       “1.2447376059072528”
+      ]
+     },
+     “execution_count”: 10,
+     “metadata”: {},
+     “output_type”: “execute_result”
+    }
+   ],
+   “source”: [
+    “limit = np.linalg.norm(V-W.dot(H), ‘fro’)\n”,
+    “\n”,
+    “limit”
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 12,
+   “metadata”: {},
+   “outputs”: [
+    {
+     “name”: “stdout”,
+     “output_type”: “stream”,
+     “text”: [
+      “limit &gt; error\n”
+     ]
+    }
+   ],
+   “source”: [
+    “if abs(init_limit - limit) &lt; error:\n”,
+    “    print(‘tolerance met’)\n”,
+    “else:\n”,
+    “    print(‘limit &gt; error’)”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “We are now done with all our steps in the alogorithm, and what is left is to put this all in a loop. “
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 17,
+   “metadata”: {},
+   “outputs”: [],
+   “source”: [
+    “def nmf(V, error=1e-6, max_iter=5000, k=3):\n”,
+    “    H = np.random.rand(k, V.shape[1])\n”,
+    “    W = np.random.rand(V.shape[0], k)\n”,
+    “    \n”,
+    “    limit_data = []\n”,
+    “    init_limit = 1e9\n”,
+    “    eps = 1e-7\n”,
+    “    \n”,
+    “    for i in range(max_iter):\n”,
+    “        H *= ((W.T.dot(V) + eps) / (W.T.dot(W).dot(H) + eps))\n”,
+    “        W *= ((V.dot(H.T) + eps) / (W.dot(H.dot(H.T)) + eps))\n”,
+    “        \n”,
+    “        limit = np.linalg.norm(V-W.dot(H), ‘fro’)\n”,
+    “        \n”,
+    “        if abs(init_limit - limit) &lt; error:\n”,
+    “            break\n”,
+    “        \n”,
+    “        init_limit = limit\n”,
+    “        limit_data.append(limit)\n”,
+    “    \n”,
+    “    return W,H, limit_data”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “Let’s do a test run with new random data to show how it works”
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 22,
+   “metadata”: {},
+   “outputs”: [],
+   “source”: [
+    “# create a 5x5 matrix with random values\n”,
+    “V = np.random.rand(5,5)\n”,
+    “\n”,
+    “W,H,lim_data = nmf(V)”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “In the graph below we can see that over the decrease in the limit value over iterations and eventually stopping at around ~170ish. “
+   ]
+  },
+  {
+   “cell_type”: “code”,
+   “execution_count”: 33,
+   “metadata”: {},
+   “outputs”: [
+    {
+     “data”: {
+      “image/png”: “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\n”,
+      “text/plain”: [
+       “&lt;Figure size 720x360 with 1 Axes&gt;”
+      ]
+     },
+     “metadata”: {
+      “needs_background”: “light”
+     },
+     “output_type”: “display_data”
+    }
+   ],
+   “source”: [
+    “import matplotlib.pyplot as plt\n”,
+    “plt.figure(figsize=(10,5))\n”,
+    “\n”,
+    “plt.title("Model Error (V - WH) per Iteration")\n”,
+    “plt.plot(lim_data)\n”,
+    “plt.show()”
+   ]
+  },
+  {
+   “cell_type”: “markdown”,
+   “metadata”: {},
+   “source”: [
+    “References: <br />\n”,
+    “-https://www.youtube.com/watch?v=kfEWZA-b-YQ <br />\n”,
+    “-"Algorithms for Non-negative Matrix Factorization": Lee &amp; Seung 2001”
+   ]
+  }
+ ],
+ “metadata”: {
+  “kernelspec”: {
+   “display_name”: “Python 3”,
+   “language”: “python”,
+   “name”: “python3”
+  },
+  “language_info”: {
+   “codemirror_mode”: {
+    “name”: “ipython”,
+    “version”: 3
+   },
+   “file_extension”: “.py”,
+   “mimetype”: “text/x-python”,
+   “name”: “python”,
+   “nbconvert_exporter”: “python”,
+   “pygments_lexer”: “ipython3”,
+   “version”: “3.8.5”
+  }
+ },
+ “nbformat”: 4,
+ “nbformat_minor”: 4
+}</p>
